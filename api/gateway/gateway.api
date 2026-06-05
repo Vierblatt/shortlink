@@ -1,0 +1,36 @@
+syntax = "v1"
+
+type (
+	ShortenReq {
+		URL        string `json:"url"`
+		CustomCode string `json:"custom_code,optional"`
+		ExpireAt   int64  `json:"expire_at,optional"`
+		Password   string `json:"password,optional"`
+	}
+	ShortenResp {
+		ShortURL string `json:"short_url"`
+		Code     string `json:"code"`
+	}
+	RedirectResp {
+		LongURL string `json:"long_url"`
+	}
+	StatsResp {
+		Code       string `json:"short_code"`
+		LongURL    string `json:"long_url"`
+		ClickCount uint64 `json:"click_count"`
+		PV         int32  `json:"pv"`
+		UV         int32  `json:"uv"`
+	}
+)
+
+service gateway {
+	@handler ShortenHandler
+	post /api/shorten (ShortenReq) returns (ShortenResp)
+
+	@handler RedirectHandler
+	get /:code returns (RedirectResp)
+
+	@handler StatsHandler
+	get /api/stats/:code returns (StatsResp)
+}
+

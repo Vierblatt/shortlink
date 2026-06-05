@@ -1,0 +1,30 @@
+syntax = "proto3";
+
+package link;
+
+option go_package = "./pb";
+
+service Link {
+  rpc Shorten(ShortenRequest) returns (ShortenResponse);
+  rpc Redirect(RedirectRequest) returns (RedirectResponse);
+}
+
+message ShortenRequest {
+  string long_url    = 1;
+  string custom_code = 2;
+  int64  expire_at   = 3;
+  string password    = 4;
+}
+
+message ShortenResponse {
+  string short_code = 1;
+  string short_url  = 2;
+}
+
+message RedirectRequest {
+  string short_code = 1;
+}
+
+message RedirectResponse {
+  string long_url = 1;
+}

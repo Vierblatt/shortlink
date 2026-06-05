@@ -1,0 +1,31 @@
+# Binaries
+/server
+/link-server
+/gateway-server
+*.exe
+*.exe~
+*.dll
+*.so
+*.dylib
+
+# IDE
+.vscode/
+.idea/
+*.swp
+*.swo
+
+# Claude
+.claude/
+
+# Env
+.env
+
+# Workspace
+go.work.sum
+
+# Legacy (reference only)
+_legacy/
+
+# OS
+.DS_Store
+Thumbs.db

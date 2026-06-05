@@ -1,0 +1,25 @@
+FROM golang:1.22-alpine AS builder
+
+WORKDIR /app
+
+ENV GOPROXY=https://goproxy.cn,direct
+ENV GO111MODULE=on
+
+COPY go.work go.work.sum* ./
+COPY common/ ./common/
+COPY rpc/link/ ./rpc/link/
+COPY api/gateway/ ./api/gateway/
+
+RUN cd api/gateway && go mod download && CGO_ENABLED=0 GOOS=linux go build -o /gateway-server .
+
+FROM alpine:3.19
+
+RUN apk add --no-cache ca-certificates tzdata
+ENV TZ=Asia/Shanghai
+
+COPY --from=builder /gateway-server /gateway-server
+COPY --from=builder /app/api/gateway/etc/gateway.yaml /etc/gateway.yaml
+
+EXPOSE 8888
+
+ENTRYPOINT ["/gateway-server"]
