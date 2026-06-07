@@ -9,8 +9,8 @@ type Config struct {
 	MySQL struct {
 		DataSource string
 	}
-	Redis struct {
-		Addr     string
+	RedisConf struct {
+		Host     string
 		Password string `json:",optional"`
 		DB       int    `json:",default=0"`
 	}

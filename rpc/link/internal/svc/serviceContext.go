@@ -41,9 +41,9 @@ func NewServiceContext(c config.Config) *ServiceContext {
 	db.AutoMigrate(&model.Link{}, &model.AccessLog{}, &model.LinkStat{})
 
 	rdb := redis.NewClient(&redis.Options{
-		Addr:     c.Redis.Addr,
-		Password: c.Redis.Password,
-		DB:       c.Redis.DB,
+		Addr:     c.RedisConf.Host,
+		Password: c.RedisConf.Password,
+		DB:       c.RedisConf.DB,
 	})
 
 	bf := bloom.New(rdb, c.BloomFilter.Key, c.BloomFilter.Size, c.BloomFilter.HashFuncs)

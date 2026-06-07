@@ -6,12 +6,12 @@ import (
 	"golink/api/gateway/internal/logic"
 	"golink/api/gateway/internal/svc"
 
-	"github.com/go-chi/chi/v5"
+	"github.com/zeromicro/go-zero/rest/pathvar"
 )
 
 func RedirectHandler(svcCtx *svc.ServiceContext) http.HandlerFunc {
 	return func(w http.ResponseWriter, r *http.Request) {
-		code := chi.URLParam(r, "code")
+		code := pathvar.Vars(r)["code"]
 		if code == "" {
 			http.NotFound(w, r)
 			return
