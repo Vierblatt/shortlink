@@ -169,32 +169,6 @@ curl http://localhost:8888/api/stats/3xK9mR
 | link_stats | 按天统计 | `(short_code, date)` unique |
 | users | 用户 (认证用) | `username`(unique), `email`(unique) |
 
-## 面试可讲亮点
-
-- **三级缓存查询**：Bloom → Redis → MySQL，每一层解决了什么问题
-- **异步解耦**：Kafka 异步写日志，不阻塞重定向响应。如果消费者挂了怎么办？Kafka 消息持久化，消费者恢复后从 offset 继续消费
-- **雪花算法**：为什么不用数据库自增？分布式场景下多实例 ID 不冲突，避免单点瓶颈
-- **go-zero 框架**：微服务治理（etcd 服务发现 + gRPC + 中间件链），相比裸写 gin 的优势
-- **Go workspace**：5 个模块统一管理依赖，不用 replace 指令
-
-### 面试高频追问
-
-> **"并发量大了怎么扩展？"**
->
-> 1. Link RPC 无状态，部署多实例 + etcd 自动负载均衡
-> 2. Redis Cluster 分片 + 本地热点缓存
-> 3. MySQL 读写分离 / 分库分表
-> 4. 短码生成改用发号器（提前批量预生成 ID）
-
-> **"怎么防止恶意刷短链接？"**
->
-> 1. JWT 认证区分用户
-> 2. API 网关层滑动窗口限流（go-zero 自带）
-> 3. 布隆过滤器过滤无效短码，不消耗 DB 资源
-
-> **"为什么用 Kafka 而不是直接写 MySQL？"**
->
-> 重定向请求对延迟敏感，同步写 DB 会将 P99 从 <2ms 拉到 10ms+。Kafka 的批量写入和异步消费可以平滑写入峰值，而且消息不会丢——消费者挂了恢复后从 offset 继续。
 
 ## TODO: 压测报告
 
