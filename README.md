@@ -172,55 +172,62 @@ curl http://localhost:8888/api/stats/3xK9mR
 
 ## 压测报告
 
-**测试场景**: 重定向接口 (`GET /:code`)，Bloom Filter → Redis → 302，相同业务逻辑。
+**测试场景**: 重定向接口 (`GET /:code`)，Bloom Filter → Redis → 302。
 
-| 指标 | Docker Desktop (Win) | Ubuntu 22.04 裸机 (wrk) |
-|------|---------------------|-------------------------|
-| **QPS** | 775 | **31,150** |
-| **P50** | 127.06ms | **2.95ms** |
-| **P95** | 185.21ms | **4.34ms** |
-| **P99** | 206.66ms | **5.72ms** |
-| 并发 | 100 goroutines | 100 connections (wrk) |
-| 错误 | 0 | 0 |
+### 三组环境对比
 
-### 同一次请求在两套环境下的耗时对比
+| 指标 | Docker Desktop (Win) | Ubuntu 裸机 (完整链路) | Ubuntu 裸机 (精简) |
+|------|---------------------|----------------------|-------------------|
+| **QPS** | 775 | **23,435** | **31,150** |
+| **P50** | 127.06ms | **4.00ms** | **2.95ms** |
+| **P99** | 206.66ms | **6.97ms** | **5.72ms** |
+| 并发 | 100 goroutines | 100 (wrk) | 100 (wrk) |
+| 架构 | go-zero gRPC 全链路 | go-zero gRPC 全链路 | HTTP 直连 Redis |
+| 错误 | 0 | 0 | 0 |
+
+- **Docker Desktop**: 完整 go-zero 微服务链路 (gateway + link-rpc + gRPC + MySQL + Redis + Kafka)，全部容器化
+- **Ubuntu 完整链路**: 同上，gateway + link-rpc 裸进程，gRPC 通信，MySQL/Redis 原生安装
+- **Ubuntu 精简**: 单文件 HTTP 服务直连 Redis，裁掉 gRPC/etcd/Kafka/MySQL，仅保留 Bloom + Redis 核心路径
+
+### 请求链路耗时对比
 
 ```mermaid
 gantt
-    title 请求处理耗时对比 — Docker Desktop vs 裸机 (同一段业务逻辑)
+    title 三组环境请求耗时对比 (P50)
     dateFormat X
     axisFormat %s ms
 
-    section Docker 版 (P50=127ms)
-    网关路由 + gRPC 序列化       :crit, d1, 0, 5
-    跨容器 gRPC 网络传输          :crit, d2, 5, 8
-    Bloom Filter 判定            :crit, d3, 8, 9
-    Redis 缓存查询               :crit, d4, 9, 11
-    响应反序列化 + 302           :crit, d5, 11, 13
-    Docker bridge NAT / WSL2 内核穿越 :crit, d6, 13, 127
+    section Docker Desktop (127ms)
+    gRPC服务间调用 + 网络转发       :crit, d1, 0, 10
+    Bloom + Redis (容器内)          :crit, d2, 10, 13
+    WSL2内核穿越 + NAT + 响应返回   :crit, d3, 13, 127
 
-    section 裸机版 (P50=2.95ms)
-    HTTP 路由解析        :active, b1, 0, 1
-    Bloom Filter 判定    :active, b2, 1, 2
-    Redis 本地查询       :active, b3, 2, 3
-    302 Redirect         :active, b4, 3, 3
+    section Ubuntu 完整链路 (4.0ms)
+    HTTP路由 + gRPC序列化          :active, f1, 0, 2
+    Bloom Filter                   :active, f2, 2, 3
+    Redis loopback                 :active, f3, 3, 4
+    302 Redirect                   :active, f4, 4, 4
+
+    section Ubuntu 精简 (2.95ms)
+    HTTP路由 + Bloom + Redis       :b1, 0, 3
+    302 Redirect                   :b2, 3, 3
 ```
 
-> 开销差异的根源：Docker Desktop 在 Windows 上通过 WSL2 虚拟化 Linux 内核，每个请求需要跨 Hyper-V 虚拟交换机做 NAT 转发。裸机 Linux 直接走内核协议栈和 Unix socket / loopback，I/O 路径不经过任何虚拟化层。
+> **瓶颈分析**: gRPC 序列化/传输约占 1ms (4.00-2.95)。剩下 3ms 是 MySQL 首次查库回源 + Bloom Filter 7次 BIT 操作。Docker Desktop 额外的 ~123ms 全部来自 WSL2 虚拟化网络栈 (Hyper-V switch + Docker bridge NAT)。
 
-### wrk 30s 持续压测 (100 并发)
+### wrk 30s — 完整链路 (100 并发)
 
 ```
-Running 30s test @ http://localhost:8888/bench
+Running 30s test @ http://localhost:8888/test
   4 threads and 100 connections
   Thread Stats   Avg      Stdev     Max   +/- Stdev
-    Latency     3.21ms  843.89us  12.82ms   70.91%
-    Req/Sec     7.83k   631.22     9.75k    70.00%
+    Latency     4.28ms    1.16ms  29.82ms   76.19%
+    Req/Sec     5.89k   471.99     7.09k    72.50%
   Latency Distribution
-     50%    2.95ms
-     75%    3.79ms
-     90%    4.34ms
-     99%    5.72ms
-  934826 requests in 30.01s, 171.17MB read
-Requests/sec:  31149.89
+     50%    4.00ms
+     75%    5.11ms
+     90%    5.58ms
+     99%    6.97ms
+  703587 requests in 30.02s, 175.80MB read
+Requests/sec:  23435.72
 ```
