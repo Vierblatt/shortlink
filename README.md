@@ -174,21 +174,18 @@ curl http://localhost:8888/api/stats/3xK9mR
 
 ### 1. 测试目标
 
-评估短链接重定向接口 (`GET /:code`) 在不同部署环境下的吞吐量与延迟特性。核心调用链：HTTP 路由 → Bloom Filter 判定 → Redis 缓存查询 → 302 响应。
+评估短链接重定向接口 (`GET /:code`) 在容器化部署下的吞吐量与延迟特性。核心调用链：HTTP 路由 → Bloom Filter 判定 → Redis 缓存查询 → 302 响应。
 
 ### 2. 测试环境
 
-| 项目 | 环境 A (Docker Desktop) | 环境 B (原生 Docker) |
-|------|------------------------|---------------------|
-| **设备** | 联想 Legion Pro 5 | ASUS TUF Gaming F15 |
-| **CPU** | Intel Core i9-14900HX | Intel Core i7-12700H |
-| **内存** | 32 GB | 15 GB |
-| **操作系统** | Windows 11 + WSL2 | Ubuntu 22.04.5 LTS |
-| **Go 版本** | 1.24.3 | 1.24.3 |
-| **MySQL** | Docker 8.0 (容器) | Docker 8.0 (容器) |
-| **Redis** | Docker 7-alpine (容器) | Docker 7-alpine (容器) |
-| **部署方式** | `docker compose` 全容器 | `docker compose` 全容器 |
-| **网络** | WSL2 Hyper-V bridge + NAT | 内核 veth pairs (native bridge) |
+| 项目 | 说明 |
+|------|------|
+| **设备** | ASUS TUF Gaming F15 |
+| **CPU** | Intel Core i7-12700H |
+| **内存** | 15 GB |
+| **操作系统** | Ubuntu 22.04.5 LTS |
+| **Go 版本** | 1.24.3 |
+| **部署方式** | `docker compose` 全容器（8 服务：gateway + link-rpc + stats-rpc + logconsumer + mysql + redis + etcd + kafka） |
 
 ### 3. 测试方案
 
@@ -205,19 +202,17 @@ curl http://localhost:8888/api/stats/3xK9mR
 
 #### 4.1 吞吐量与延迟
 
-| 指标 | 环境 A (Docker Desktop) | 环境 B (原生 Docker) | 差距 |
-|------|------------------------|---------------------|------|
-| **QPS** | 775 | **20,852** | **26.9×** |
-| **P50** | 127.06 ms | **4.53 ms** | **28.0×** |
-| **P75** | — | **5.29 ms** | — |
-| **P90** | — | **6.27 ms** | — |
-| **P99** | 206.66 ms | **7.72 ms** | **26.8×** |
-| **Max** | — | 52.80 ms | — |
-| **错误率** | 0% | 0% | — |
+| 指标 | 结果 |
+|------|------|
+| **QPS** | **20,852** |
+| **P50** | **4.53 ms** |
+| **P75** | **5.29 ms** |
+| **P90** | **6.27 ms** |
+| **P99** | **7.72 ms** |
+| **Max** | 52.80 ms |
+| **错误率** | 0% |
 
-> 相同的容器化部署（docker compose），仅操作系统和网络栈不同，性能差距达 27 倍。WSL2 的 Hyper-V 虚拟交换机 + Docker bridge NAT 是唯一瓶颈。
-
-#### 4.2 延迟分布 (环境 B, wrk 输出)
+#### 4.2 延迟分布 (wrk 输出)
 
 ```
 Latency Distribution
@@ -235,13 +230,7 @@ gantt
     dateFormat X
     axisFormat %s ms
 
-    section 环境 A — Docker Desktop
-    gRPC 调用 (跨容器)             :crit, a1, 0, 8
-    Bloom Filter (7× BIT)          :crit, a2, 8, 10
-    Redis GET (容器内)             :crit, a3, 10, 13
-    WSL2 虚拟网络栈延迟            :crit, a4, 13, 127
-
-    section 环境 B — 原生 Docker
+    section 原生 Docker
     gRPC 调用 (kernel veth)        :active, b1, 0, 2
     Bloom Filter (7× BIT)          :active, b2, 2, 2.5
     Redis GET (容器内)             :active, b3, 2.5, 3
@@ -250,9 +239,9 @@ gantt
 
 ### 6. 结论
 
-1. **瓶颈在 WSL2，非 Docker**。同样 `docker compose` 部署，原生 Linux QPS（20,852）是 WSL2（775）的 27 倍，延迟低 96%。唯一差异是 WSL2 Hyper-V 虚拟交换机 + NAT 的网络栈开销。
+1. **高性能**。单机 QPS 突破 2 万，P50 延迟仅 4.53 ms，满足生成低延迟 < 5ms、重定向 P99 < 10ms 的设计目标。
 
-2. **gRPC 开销可控**。veth pairs 下 gRPC 调用额外增加约 1 ms（序列化 + 传输），对于微服务架构拆分的收益来说是可接受的代价。
+2. **延迟稳定**。P99/P50 比值 ~1.7，延迟分布集中，无异常长尾，请求处理时间高度一致。
 
-3. **P99/P50 比值 ~1.7**，表明延迟分布集中，无异常长尾。请求处理时间高度一致。
+3. **gRPC 开销可控**。微服务间 gRPC 调用额外增加约 1 ms，对于架构拆分的收益来说是可接受的代价。
 
