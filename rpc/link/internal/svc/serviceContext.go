@@ -11,16 +11,18 @@ import (
 
 	"golink/common/bloom"
 	"golink/common/model"
+	"golink/common/mq"
 	"golink/common/snowflake"
 	"golink/rpc/link/internal/config"
 )
 
 type ServiceContext struct {
-	Config      config.Config
-	DB          *gorm.DB
-	RedisClient *redis.Client
-	BloomFilter *bloom.BloomFilter
-	Snowflake   *snowflake.Snowflake
+	Config        config.Config
+	DB            *gorm.DB
+	RedisClient   *redis.Client
+	BloomFilter   *bloom.BloomFilter
+	Snowflake     *snowflake.Snowflake
+	KafkaProducer *mq.Producer
 }
 
 func NewServiceContext(c config.Config) *ServiceContext {
@@ -51,11 +53,14 @@ func NewServiceContext(c config.Config) *ServiceContext {
 		panic(fmt.Sprintf("init snowflake: %v", err))
 	}
 
+	kp := mq.NewProducer(c.Kafka.Brokers, c.Kafka.Topic)
+
 	return &ServiceContext{
-		Config:      c,
-		DB:          db,
-		RedisClient: rdb,
-		BloomFilter: bf,
-		Snowflake:   sf,
+		Config:        c,
+		DB:            db,
+		RedisClient:   rdb,
+		BloomFilter:   bf,
+		Snowflake:     sf,
+		KafkaProducer: kp,
 	}
 }

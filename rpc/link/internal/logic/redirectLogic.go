@@ -6,6 +6,7 @@ import (
 	"time"
 
 	"golink/common/model"
+	"golink/common/mq"
 	"golink/rpc/link/internal/svc"
 	"golink/rpc/link/pb"
 
@@ -58,6 +59,17 @@ func (l *RedirectLogic) Redirect(in *pb.RedirectRequest) (*pb.RedirectResponse, 
 	// write back cache
 	ttl := time.Duration(l.svcCtx.Config.CacheTTL) * time.Second
 	l.svcCtx.RedisClient.Set(l.ctx, cacheKey(code), link.LongURL, ttl)
+
+	// async send access log to Kafka
+	go func() {
+		msg := &mq.AccessLogMessage{
+			ShortCode: code,
+			Timestamp: time.Now().Unix(),
+		}
+		if err := l.svcCtx.KafkaProducer.SendAccessLog(context.Background(), msg); err != nil {
+			logx.Errorf("send access log: %v", err)
+		}
+	}()
 
 	return &pb.RedirectResponse{LongUrl: link.LongURL}, nil
 }

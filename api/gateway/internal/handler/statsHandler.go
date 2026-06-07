@@ -4,16 +4,25 @@
 package handler
 
 import (
+	"fmt"
 	"net/http"
 
-	"github.com/zeromicro/go-zero/rest/httpx"
 	"golink/api/gateway/internal/logic"
 	"golink/api/gateway/internal/svc"
+
+	"github.com/go-chi/chi/v5"
+	"github.com/zeromicro/go-zero/rest/httpx"
 )
 
 func StatsHandler(svcCtx *svc.ServiceContext) http.HandlerFunc {
 	return func(w http.ResponseWriter, r *http.Request) {
-		l := logic.NewStatsLogic(r.Context(), svcCtx)
+		code := chi.URLParam(r, "code")
+		if code == "" {
+			httpx.ErrorCtx(r.Context(), w, fmt.Errorf("short code is required"))
+			return
+		}
+
+		l := logic.NewStatsLogic(r.Context(), svcCtx).SetCode(code)
 		resp, err := l.Stats()
 		if err != nil {
 			httpx.ErrorCtx(r.Context(), w, err)

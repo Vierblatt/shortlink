@@ -22,4 +22,8 @@ type Config struct {
 	CacheTTL          int    `json:",default=3600"`
 	ShortLinkDomain   string `json:",optional"`
 	SnowflakeWorkerID int64  `json:",default=1"`
+	Kafka             struct {
+		Brokers []string
+		Topic   string `json:",default=access_logs"`
+	}
 }

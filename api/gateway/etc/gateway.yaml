@@ -6,3 +6,8 @@ LinkRpc:
     Hosts:
     - 127.0.0.1:2379
     Key: link.rpc
+StatsRpc:
+  Etcd:
+    Hosts:
+    - 127.0.0.1:2379
+    Key: stats.rpc

@@ -93,6 +93,34 @@ services:
     ports:
       - "9000:9000"
 
+  stats-rpc:
+    build:
+      context: .
+      dockerfile: deploy/docker/Dockerfile.stats
+    container_name: golink-stats-rpc
+    restart: always
+    depends_on:
+      mysql:
+        condition: service_healthy
+      etcd:
+        condition: service_started
+    ports:
+      - "9001:9001"
+
+  logconsumer:
+    build:
+      context: .
+      dockerfile: deploy/docker/Dockerfile.logconsumer
+    container_name: golink-logconsumer
+    restart: always
+    depends_on:
+      mysql:
+        condition: service_healthy
+      kafka:
+        condition: service_started
+    environment:
+      MYSQL_PASSWORD: ${MYSQL_PASSWORD:-root123}
+
   gateway:
     build:
       context: .

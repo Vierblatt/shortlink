@@ -2,6 +2,18 @@ CREATE DATABASE IF NOT EXISTS golink DEFAULT CHARSET utf8mb4;
 
 USE golink;
 
+CREATE TABLE IF NOT EXISTS `users` (
+  `id` bigint unsigned NOT NULL,
+  `username` varchar(64) NOT NULL COMMENT '用户名',
+  `email` varchar(128) NOT NULL COMMENT '邮箱',
+  `password` varchar(256) NOT NULL COMMENT '密码(bcrypt)',
+  `created_at` datetime NOT NULL DEFAULT CURRENT_TIMESTAMP,
+  `updated_at` datetime NOT NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
+  PRIMARY KEY (`id`),
+  UNIQUE KEY `idx_username` (`username`),
+  UNIQUE KEY `idx_email` (`email`)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;
+
 CREATE TABLE IF NOT EXISTS `links` (
   `id` bigint unsigned NOT NULL,
   `short_code` varchar(16) NOT NULL COMMENT '短码',

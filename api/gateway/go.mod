@@ -6,6 +6,7 @@ require (
 	github.com/go-chi/chi/v5 v5.2.1
 	github.com/zeromicro/go-zero v1.10.2
 	golink/rpc/link v0.0.0
+	golink/rpc/stats v0.0.0
 )
 
 require (
@@ -103,4 +104,5 @@ require (
 replace (
 	golink/common => ../../common
 	golink/rpc/link => ../../rpc/link
+	golink/rpc/stats => ../../rpc/stats
 )

@@ -4,4 +4,6 @@ use (
 	./api/gateway
 	./common
 	./rpc/link
+	./rpc/stats
+	./service/logconsumer
 )
