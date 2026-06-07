@@ -178,17 +178,17 @@ curl http://localhost:8888/api/stats/3xK9mR
 
 ### 2. 测试环境
 
-| 项目 | 环境 A | 环境 B | 环境 C |
-|------|--------|--------|--------|
-| **设备** | 联想 Legion Pro 5 | ASUS TUF Gaming F15 | ASUS TUF Gaming F15 |
-| **CPU** | Intel Core i9-14900HX | Intel Core i7-12700H | Intel Core i7-12700H |
-| **内存** | 32 GB | 15 GB | 15 GB |
-| **操作系统** | Windows 11 + WSL2 | Ubuntu 22.04.5 LTS | Ubuntu 22.04.5 LTS |
-| **Go 版本** | 1.24.3 | 1.24.3 | 1.24.3 |
-| **MySQL** | Docker 8.0 (容器) | 8.0.46 (原生) | Docker 8.0 (容器) |
-| **Redis** | Docker 7-alpine (容器) | 6.0.16 (原生) | Docker 7-alpine (容器) |
-| **部署方式** | `docker compose` 全容器 | 裸进程 `go build` | `docker compose` 全容器 |
-| **网络** | WSL2 Hyper-V bridge + NAT | 内核 loopback (`127.0.0.1`) | 内核 veth pairs (native bridge) |
+| 项目 | 环境 A (Docker Desktop) | 环境 B (原生 Docker) |
+|------|------------------------|---------------------|
+| **设备** | 联想 Legion Pro 5 | ASUS TUF Gaming F15 |
+| **CPU** | Intel Core i9-14900HX | Intel Core i7-12700H |
+| **内存** | 32 GB | 15 GB |
+| **操作系统** | Windows 11 + WSL2 | Ubuntu 22.04.5 LTS |
+| **Go 版本** | 1.24.3 | 1.24.3 |
+| **MySQL** | Docker 8.0 (容器) | Docker 8.0 (容器) |
+| **Redis** | Docker 7-alpine (容器) | Docker 7-alpine (容器) |
+| **部署方式** | `docker compose` 全容器 | `docker compose` 全容器 |
+| **网络** | WSL2 Hyper-V bridge + NAT | 内核 veth pairs (native bridge) |
 
 ### 3. 测试方案
 
@@ -205,44 +205,27 @@ curl http://localhost:8888/api/stats/3xK9mR
 
 #### 4.1 吞吐量与延迟
 
-| 指标 | 环境 A (Docker Desktop) | 环境 B (裸机) | 环境 C (原生 Docker) |
-|------|------------------------|-------------|---------------------|
-| **QPS** | 775 | **23,435** | **20,852** |
-| **P50** | 127.06 ms | **4.00 ms** | **4.53 ms** |
-| **P75** | — | **5.11 ms** | **5.29 ms** |
-| **P90** | — | **5.58 ms** | **6.27 ms** |
-| **P99** | 206.66 ms | **6.97 ms** | **7.72 ms** |
-| **Max** | — | 29.82 ms | 52.80 ms |
-| **错误率** | 0% | 0% | 0% |
+| 指标 | 环境 A (Docker Desktop) | 环境 B (原生 Docker) | 差距 |
+|------|------------------------|---------------------|------|
+| **QPS** | 775 | **20,852** | **26.9×** |
+| **P50** | 127.06 ms | **4.53 ms** | **28.0×** |
+| **P75** | — | **5.29 ms** | — |
+| **P90** | — | **6.27 ms** | — |
+| **P99** | 206.66 ms | **7.72 ms** | **26.8×** |
+| **Max** | — | 52.80 ms | — |
+| **错误率** | 0% | 0% | — |
+
+> 相同的容器化部署（docker compose），仅操作系统和网络栈不同，性能差距达 27 倍。WSL2 的 Hyper-V 虚拟交换机 + Docker bridge NAT 是唯一瓶颈。
 
 #### 4.2 延迟分布 (环境 B, wrk 输出)
 
 ```
 Latency Distribution
-   50%    4.00 ms
-   75%    5.11 ms
-   90%    5.58 ms
-   99%    6.97 ms
+   50%    4.53 ms
+   75%    5.29 ms
+   90%    6.27 ms
+   99%    7.72 ms
 ```
-
-#### 4.3 不同并发级别 (环境 B)
-
-| 并发连接数 | QPS | P50 | P99 |
-|-----------|------|-----|-----|
-| 100 | 23,435 | 4.00 ms | 6.97 ms |
-| 500 | 23,095 | 20.69 ms | 29.99 ms |
-
-> 500 并发时 QPS 无明显衰减，延迟增长主要来自 goroutine 调度排队，非资源泄漏或锁竞争。
-
-#### 4.4 Docker 对比：WSL2 vs 原生 Linux
-
-| 指标 | WSL2 Docker | 原生 Linux Docker | 差距 |
-|------|------------|------------------|------|
-| QPS | 775 | 20,852 | **26.9×** |
-| P50 | 127.06 ms | 4.53 ms | **28.0×** |
-| P99 | 206.66 ms | 7.72 ms | **26.8×** |
-
-> 相同的容器化部署，仅操作系统和网络栈不同，性能差距达 27 倍。WSL2 的 Hyper-V 虚拟交换机 + Docker bridge NAT 是唯一下降源。原生 Linux Docker 与裸机性能差距仅 ~11%（QPS 20,852 vs 23,435），veth pairs 的开销可忽略不计。
 
 ### 5. 耗时分解
 
@@ -258,36 +241,18 @@ gantt
     Redis GET (容器内)             :crit, a3, 10, 13
     WSL2 虚拟网络栈延迟            :crit, a4, 13, 127
 
-    section 环境 B — 裸机
-    HTTP 路由 + gRPC 序列化        :active, b1, 0, 2
-    Bloom Filter (7× BIT)          :active, b2, 2, 3
-    Redis GET (loopback)           :active, b3, 3, 4
-    302 响应                       :active, b4, 4, 4
-
-    section 环境 C — 原生 Docker
-    gRPC 调用 (kernel veth)        :c1, 0, 2
-    Bloom Filter (7× BIT)          :c2, 2, 2.5
-    Redis GET (容器内)             :c3, 2.5, 3
-    Docker bridge (veth pairs)     :c4, 3, 4.5
+    section 环境 B — 原生 Docker
+    gRPC 调用 (kernel veth)        :active, b1, 0, 2
+    Bloom Filter (7× BIT)          :active, b2, 2, 2.5
+    Redis GET (容器内)             :active, b3, 2.5, 3
+    Docker bridge (veth pairs)     :active, b4, 3, 4.5
 ```
-
-| 耗时来源 | 占比 | 说明 |
-|---------|------|------|
-| gRPC 调用 (序列化+传输+反序列化) | ~1.0 ms | 本地 loopback，无网络开销 |
-| Bloom Filter (7 次 BIT) | ~0.5 ms | Redis Bitmap，同机 loopback |
-| Redis GET | ~0.5 ms | Cache-Aside 命中路径 |
-| MySQL (首次回源) | ~2.0 ms | GORM AutoMigrate + 首次查询 |
-| 总计 | **~4.0 ms** | — |
 
 ### 6. 结论
 
-1. **瓶颈在 WSL2，非 Docker 本身**。环境 C 原生 Docker QPS（20,852）是环境 A WSL2（775）的 27 倍。相同容器化部署，唯一差异是 WSL2 Hyper-V 虚拟交换机 + NAT。将开发环境迁移至原生 Linux 可收回 96% 的"丢失性能"。
+1. **瓶颈在 WSL2，非 Docker**。同样 `docker compose` 部署，原生 Linux QPS（20,852）是 WSL2（775）的 27 倍，延迟低 96%。唯一差异是 WSL2 Hyper-V 虚拟交换机 + NAT 的网络栈开销。
 
-2. **容器化开销可接受**。环境 C（Docker）vs 环境 B（裸机）：QPS 仅降低 11%，P50 延迟增加 0.53 ms。Linux 内核 veth pairs 的网络开销几乎可以忽略。
+2. **gRPC 开销可控**。veth pairs 下 gRPC 调用额外增加约 1 ms（序列化 + 传输），对于微服务架构拆分的收益来说是可接受的代价。
 
-3. **gRPC 开销可控**。本地 loopback/veth 下 gRPC 调用额外增加约 1 ms（序列化 + 传输），对于微服务架构拆分的收益来说是可接受的代价。
-
-4. **并发稳定性良好**。100 → 500 并发时 QPS 无明显下降 (23,435 → 23,095)，延迟上升符合排队论预期，系统无单点瓶颈。
-
-5. **P99/P50 比值 ~1.7**，表明延迟分布集中，无异常长尾。请求处理时间高度一致。
+3. **P99/P50 比值 ~1.7**，表明延迟分布集中，无异常长尾。请求处理时间高度一致。
 
