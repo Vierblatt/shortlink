@@ -1,0 +1,8 @@
+Name: stats.rpc
+ListenOn: 0.0.0.0:9001
+Etcd:
+  Hosts:
+  - 127.0.0.1:2379
+  Key: stats.rpc
+MySQL:
+  DataSource: root:root123@tcp(127.0.0.1:3306)/golink?charset=utf8mb4&parseTime=True&loc=Local

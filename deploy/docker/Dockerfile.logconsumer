@@ -1,0 +1,21 @@
+FROM golang:1.22-alpine AS builder
+
+WORKDIR /app
+
+ENV GOPROXY=https://goproxy.cn,direct
+ENV GO111MODULE=on
+
+COPY go.work go.work.sum* ./
+COPY common/ ./common/
+COPY service/logconsumer/ ./service/logconsumer/
+
+RUN cd service/logconsumer && go mod download && CGO_ENABLED=0 GOOS=linux go build -o /logconsumer .
+
+FROM alpine:3.19
+
+RUN apk add --no-cache ca-certificates tzdata
+ENV TZ=Asia/Shanghai
+
+COPY --from=builder /logconsumer /logconsumer
+
+ENTRYPOINT ["/logconsumer"]
