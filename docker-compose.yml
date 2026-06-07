@@ -88,6 +88,8 @@ services:
     environment:
       MYSQL_PASSWORD: ${MYSQL_PASSWORD:-root123}
       REDIS_PASSWORD: ${REDIS_PASSWORD:-}
+    volumes:
+      - ./deploy/docker/config/link.yaml:/etc/link.yaml:ro
     ports:
       - "9000:9000"
 
@@ -102,6 +104,8 @@ services:
         condition: service_healthy
       etcd:
         condition: service_started
+    volumes:
+      - ./deploy/docker/config/stats.yaml:/etc/stats.yaml:ro
     ports:
       - "9001:9001"
 
@@ -118,6 +122,11 @@ services:
         condition: service_started
     environment:
       MYSQL_PASSWORD: ${MYSQL_PASSWORD:-root123}
+    command:
+      - -dsn
+      - root:${MYSQL_PASSWORD:-root123}@tcp(mysql:3306)/golink?charset=utf8mb4&parseTime=True
+      - -kafka
+      - kafka:9092
 
   gateway:
     build:
@@ -128,6 +137,8 @@ services:
     depends_on:
       - link-rpc
       - etcd
+    volumes:
+      - ./deploy/docker/config/gateway.yaml:/etc/gateway.yaml:ro
     ports:
       - "8888:8888"
 

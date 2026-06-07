@@ -1,4 +1,4 @@
-FROM golang:1.22-alpine AS builder
+FROM golang:1.24-alpine AS builder
 
 WORKDIR /app
 
@@ -9,7 +9,7 @@ COPY go.work go.work.sum* ./
 COPY common/ ./common/
 COPY rpc/link/ ./rpc/link/
 
-RUN cd rpc/link && go mod download && CGO_ENABLED=0 GOOS=linux go build -o /link-server .
+RUN cd rpc/link && GOWORK=off go mod download && GOWORK=off CGO_ENABLED=0 GOOS=linux go build -o /link-server .
 
 FROM alpine:3.19
 

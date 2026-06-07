@@ -1,0 +1,23 @@
+Name: link.rpc
+ListenOn: 0.0.0.0:9000
+Etcd:
+  Hosts:
+  - etcd:2379
+  Key: link.rpc
+MySQL:
+  DataSource: root:root123@tcp(mysql:3306)/golink?charset=utf8mb4&parseTime=True&loc=Local
+RedisConf:
+  Host: redis:6379
+  Password: ""
+  DB: 0
+BloomFilter:
+  Key: golink:bloom
+  Size: 10000000
+  HashFuncs: 7
+CacheTTL: 3600
+ShortLinkDomain: http://localhost:8888
+SnowflakeWorkerID: 1
+Kafka:
+  Brokers:
+  - kafka:9092
+  Topic: access_logs

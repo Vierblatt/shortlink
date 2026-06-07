@@ -1,0 +1,13 @@
+Name: gateway
+Host: 0.0.0.0
+Port: 8888
+LinkRpc:
+  Etcd:
+    Hosts:
+    - etcd:2379
+    Key: link.rpc
+StatsRpc:
+  Etcd:
+    Hosts:
+    - etcd:2379
+    Key: stats.rpc
