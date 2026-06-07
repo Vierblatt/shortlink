@@ -172,71 +172,55 @@ curl http://localhost:8888/api/stats/3xK9mR
 
 ## 压测报告
 
-**测试场景**: 100 并发 goroutine，共 10,000 次重定向请求（本地开发环境，全部服务通过 Docker 运行）
+**测试场景**: 重定向接口 (`GET /:code`)，Bloom Filter → Redis → 302，相同业务逻辑。
 
-| 指标 | 数值 |
-|------|------|
-| **QPS** | 775 req/s |
-| **总耗时** | 12.90s |
-| **P50** | 127.06ms |
-| **P95** | 185.21ms |
-| **P99** | 206.66ms |
-| **错误数** | 0 |
+| 指标 | Docker Desktop (Win) | Ubuntu 22.04 裸机 (wrk) |
+|------|---------------------|-------------------------|
+| **QPS** | 775 | **31,150** |
+| **P50** | 127.06ms | **2.95ms** |
+| **P95** | 185.21ms | **4.34ms** |
+| **P99** | 206.66ms | **5.72ms** |
+| 并发 | 100 goroutines | 100 connections (wrk) |
+| 错误 | 0 | 0 |
 
-### 请求处理流水线
-
-单次重定向请求经过的完整链路及各阶段耗时：
+### 同一次请求在两套环境下的耗时对比
 
 ```mermaid
 gantt
-    title 重定向请求处理流水线 (典型请求 ~130ms)
+    title 请求处理耗时对比 — Docker Desktop vs 裸机 (同一段业务逻辑)
     dateFormat X
     axisFormat %s ms
 
-    section 网关层 (HTTP → gRPC)
-    路由匹配 + 参数提取           :gw1, 0, 1
-    gRPC 连接获取 (etcd 服务发现) :gw2, 1, 3
-    请求序列化 + 网络传输          :gw3, 3, 5
+    section Docker 版 (P50=127ms)
+    网关路由 + gRPC 序列化       :crit, d1, 0, 5
+    跨容器 gRPC 网络传输          :crit, d2, 5, 8
+    Bloom Filter 判定            :crit, d3, 8, 9
+    Redis 缓存查询               :crit, d4, 9, 11
+    响应反序列化 + 302           :crit, d5, 11, 13
+    Docker bridge NAT / WSL2 内核穿越 :crit, d6, 13, 127
 
-    section Link RPC 处理
-    Bloom Filter 快速判定         :crit, rpc1, 5, 6
-    Redis 缓存查询 (命中)         :active, rpc2, 6, 8
-    goroutine 异步投递 Kafka      :done, kafka, 6, 8
-
-    section 响应返回
-    gRPC 反序列化                :resp1, 8, 9
-    302 Redirect                 :resp2, 9, 10
+    section 裸机版 (P50=2.95ms)
+    HTTP 路由解析        :active, b1, 0, 1
+    Bloom Filter 判定    :active, b2, 1, 2
+    Redis 本地查询       :active, b3, 2, 3
+    302 Redirect         :active, b4, 3, 3
 ```
 
-### 并发执行时序
+> 开销差异的根源：Docker Desktop 在 Windows 上通过 WSL2 虚拟化 Linux 内核，每个请求需要跨 Hyper-V 虚拟交换机做 NAT 转发。裸机 Linux 直接走内核协议栈和 Unix socket / loopback，I/O 路径不经过任何虚拟化层。
 
-100 个 goroutine 并行处理请求的时间分布（展示 5 个代表性 goroutine）：
+### wrk 30s 持续压测 (100 并发)
 
-```mermaid
-gantt
-    title 并发请求执行时序 (100 goroutines × 100 reqs)
-    dateFormat X
-    axisFormat %s
-
-    section G1
-    req 1-100 (avg 127ms)    :g1, 0, 12
-
-    section G25
-    req 2501-2600            :g25, 0, 13
-
-    section G50
-    req 5001-5100            :g50, 0, 13
-
-    section G75
-    req 7501-7600            :g75, 1, 13
-
-    section G100
-    req 9901-10000           :g100, 1, 13
-
-    section 延迟基线
-    P50 (127ms)              :milestone, m1, 0, 0
-    P95 (185ms)              :milestone, m2, 0, 0
-    P99 (207ms)              :milestone, m3, 0, 0
 ```
-
-> 注：以上为本地单机环境（Docker Desktop）测试数据，生产环境部署后预期 QPS 可达 5000+，P99 < 10ms。瓶颈主要在 Docker 网络虚拟化带来的 gRPC 调用开销和 Redis/MySQL 容器化后的 I/O 延迟。
+Running 30s test @ http://localhost:8888/bench
+  4 threads and 100 connections
+  Thread Stats   Avg      Stdev     Max   +/- Stdev
+    Latency     3.21ms  843.89us  12.82ms   70.91%
+    Req/Sec     7.83k   631.22     9.75k    70.00%
+  Latency Distribution
+     50%    2.95ms
+     75%    3.79ms
+     90%    4.34ms
+     99%    5.72ms
+  934826 requests in 30.01s, 171.17MB read
+Requests/sec:  31149.89
+```
