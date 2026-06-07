@@ -180,8 +180,8 @@ curl http://localhost:8888/api/stats/3xK9mR
 
 | 项目 | 环境 A | 环境 B |
 |------|--------|--------|
-| **设备** | Windows 11 工作站 | ASUS TUF 笔记本 |
-| **CPU** | Intel Core i7-13700 | Intel Core i5 (12 代) |
+| **设备** | 联想 Legion Pro 5 | ASUS TUF Gaming F15 |
+| **CPU** | Intel Core i9-14900HX | Intel Core i7-12700H |
 | **内存** | 32 GB | 15 GB |
 | **操作系统** | Windows 11 + WSL2 | Ubuntu 22.04.5 LTS |
 | **Go 版本** | 1.24.3 | 1.24.3 |
