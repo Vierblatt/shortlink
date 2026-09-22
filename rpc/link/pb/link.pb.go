@@ -142,8 +142,12 @@ func (x *ShortenResponse) GetShortUrl() string {
 }
 
 type RedirectRequest struct {
-	state         protoimpl.MessageState `protogen:"open.v1"`
-	ShortCode     string                 `protobuf:"bytes,1,opt,name=short_code,json=shortCode,proto3" json:"short_code,omitempty"`
+	state     protoimpl.MessageState `protogen:"open.v1"`
+	ShortCode string                 `protobuf:"bytes,1,opt,name=short_code,json=shortCode,proto3" json:"short_code,omitempty"`
+	// 访问来源信息，由网关从 HTTP 请求提取，用于访问日志统计。
+	Ip            string `protobuf:"bytes,2,opt,name=ip,proto3" json:"ip,omitempty"`
+	UserAgent     string `protobuf:"bytes,3,opt,name=user_agent,json=userAgent,proto3" json:"user_agent,omitempty"`
+	Referer       string `protobuf:"bytes,4,opt,name=referer,proto3" json:"referer,omitempty"`
 	unknownFields protoimpl.UnknownFields
 	sizeCache     protoimpl.SizeCache
 }
@@ -181,6 +185,27 @@ func (*RedirectRequest) Descriptor() ([]byte, []int) {
 func (x *RedirectRequest) GetShortCode() string {
 	if x != nil {
 		return x.ShortCode
+	}
+	return ""
+}
+
+func (x *RedirectRequest) GetIp() string {
+	if x != nil {
+		return x.Ip
+	}
+	return ""
+}
+
+func (x *RedirectRequest) GetUserAgent() string {
+	if x != nil {
+		return x.UserAgent
+	}
+	return ""
+}
+
+func (x *RedirectRequest) GetReferer() string {
+	if x != nil {
+		return x.Referer
 	}
 	return ""
 }
@@ -244,10 +269,14 @@ const file_link_proto_rawDesc = "" +
 	"\x0fShortenResponse\x12\x1d\n" +
 	"\n" +
 	"short_code\x18\x01 \x01(\tR\tshortCode\x12\x1b\n" +
-	"\tshort_url\x18\x02 \x01(\tR\bshortUrl\"0\n" +
+	"\tshort_url\x18\x02 \x01(\tR\bshortUrl\"y\n" +
 	"\x0fRedirectRequest\x12\x1d\n" +
 	"\n" +
-	"short_code\x18\x01 \x01(\tR\tshortCode\"-\n" +
+	"short_code\x18\x01 \x01(\tR\tshortCode\x12\x0e\n" +
+	"\x02ip\x18\x02 \x01(\tR\x02ip\x12\x1d\n" +
+	"\n" +
+	"user_agent\x18\x03 \x01(\tR\tuserAgent\x12\x18\n" +
+	"\areferer\x18\x04 \x01(\tR\areferer\"-\n" +
 	"\x10RedirectResponse\x12\x19\n" +
 	"\blong_url\x18\x01 \x01(\tR\alongUrl2y\n" +
 	"\x04Link\x126\n" +

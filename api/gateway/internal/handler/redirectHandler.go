@@ -17,7 +17,11 @@ func RedirectHandler(svcCtx *svc.ServiceContext) http.HandlerFunc {
 			return
 		}
 
-		l := logic.NewRedirectLogic(r.Context(), svcCtx).SetCode(code)
+		l := logic.NewRedirectLogic(r.Context(), svcCtx).SetCode(code).SetClientInfo(
+			clientIP(r),
+			truncate(r.UserAgent()),
+			truncate(r.Referer()),
+		)
 		resp, err := l.Redirect()
 		if err != nil {
 			http.NotFound(w, r)

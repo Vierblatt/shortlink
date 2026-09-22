@@ -23,6 +23,10 @@ message ShortenResponse {
 
 message RedirectRequest {
   string short_code = 1;
+  // 访问来源信息，由网关从 HTTP 请求提取，用于访问日志统计。
+  string ip         = 2;
+  string user_agent = 3;
+  string referer    = 4;
 }
 
 message RedirectResponse {
