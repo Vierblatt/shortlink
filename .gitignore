@@ -17,6 +17,9 @@
 # Claude
 .claude/
 
+# 编辑器/AI 工具本地记忆目录
+.workbuddy/
+
 # Env
 .env
 
