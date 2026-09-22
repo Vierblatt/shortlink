@@ -69,10 +69,23 @@ Bloom Filter → Redis → MySQL
 ### 3. 访问日志 — Kafka 异步解耦
 
 ```go
-// redirectLogic 中不阻塞响应
-go func() {
-    producer.SendAccessLog(ctx, &msg)
-}()
+// 命中判定之后立即异步投递，不阻塞 302 响应
+sendLog := func() {
+    msg := &mq.AccessLogMessage{
+        ShortCode: code,
+        IP:        in.Ip,
+        UserAgent: in.UserAgent,
+        Referer:   in.Referer,
+        Timestamp: time.Now().Unix(),
+    }
+    // 用 context.Background 而非请求 ctx：请求返回后 ctx 即被取消，
+    // 会导致异步投递被中断。
+    go func() {
+        if err := l.svcCtx.KafkaProducer.SendAccessLog(context.Background(), msg); err != nil {
+            logx.Errorf("send access log: %v", err)
+        }
+    }()
+}
 ```
 
 重定向请求不等待日志写入，通过 goroutine 异步投递 Kafka，LogConsumer 后端消费：
@@ -81,6 +94,14 @@ go func() {
 Kafka 消息 → LogConsumer → INSERT access_logs
                          → UPSERT link_stats (PV+1, 按天统计)
 ```
+
+> **注意投递位置。** `sendLog` 必须在**缓存命中与 MySQL 回源两条返回路径上都调用**。
+> 由于 `Shorten` 在建链时即写入 Redis 缓存，短链创建后几乎所有请求都走缓存命中分支；
+> 若把投递只放在回源分支之后，访问日志会几乎不被写下（实测 3 次访问仅记录 1 次）。
+> 详见 [docs/P0-1-FIX.md](docs/P0-1-FIX.md)。
+
+客户端来源字段（IP / User-Agent / Referer）由网关从 HTTP 请求提取后经 gRPC 传入。
+XFF 可被客户端伪造，因此仅用于日志统计；若将来用于限流或鉴权，需改为只信任已知代理链。
 
 ### 4. 统计数据 — 按天去重 UV
 
@@ -222,6 +243,29 @@ Latency Distribution
    99%    7.72 ms
 ```
 
+#### 4.3 环境敏感性（重要）
+
+**上表数字依赖 Linux 原生内核，不应跨虚拟化环境比较。**
+
+同一份代码在不同环境下的实测差距可达 30 倍，瓶颈在虚拟化层而非应用代码：
+
+| 环境 | QPS |
+|------|-----|
+| Docker Desktop (Windows / WSL2) | 775 |
+| Ubuntu 22.04 裸机，完整 go-zero 链路（gateway + gRPC + MySQL/Redis） | 23,435 |
+| Ubuntu 22.04 裸机，精简路径（去掉 gRPC/etcd/Kafka/MySQL，仅 Bloom + Redis） | 31,150 |
+
+开销根源：Docker Desktop 在 Windows 上通过 WSL2 虚拟化 Linux 内核，
+每个请求需跨 Hyper-V 虚拟交换机做 NAT 转发；裸机 Linux 直接走内核协议栈，
+I/O 路径不经过虚拟化层。
+
+复现压测请用 `scripts/bench.sh`，脚本会自动检测并警告 Docker Desktop 环境：
+
+```bash
+bash scripts/bench.sh              # 默认 4 线程 × 100 连接 × 30s
+bash scripts/bench.sh 4 200 60     # 自定义 线程数 连接数 时长
+```
+
 ### 5. 耗时分解
 
 ```mermaid
@@ -244,4 +288,19 @@ gantt
 2. **延迟稳定**。P99/P50 比值 ~1.7，延迟分布集中，无异常长尾，请求处理时间高度一致。
 
 3. **gRPC 开销可控**。微服务间 gRPC 调用额外增加约 1 ms，对于架构拆分的收益来说是可接受的代价。
+
+#### 已知瓶颈
+
+上述压测覆盖的是**重定向路径**（Bloom → Redis → 302），不含访问日志的落库链路。
+修复 P0-1 后每条请求都会产生一条 Kafka 消息，消费端随即成为瓶颈：
+
+```
+生产速率 ≈ 7,385 条/秒
+消费速率 ≈    25 条/秒        （10 秒采样：offset 2316 → 2566 → 2820）
+LAG      ≈ 230,000 条
+```
+
+`logconsumer` 目前逐条 `ReadMessage` + 逐条 `db.Create`，无批量写入。
+原实现下约 2/3 的请求不产生消息，该瓶颈被掩盖。生产化需要改为
+**批量消费 + 批量入库 + 批量提交 offset**。
 
