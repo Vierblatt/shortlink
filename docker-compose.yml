@@ -55,22 +55,52 @@ services:
     volumes:
       - etcd_data:/etcd-data
 
+  # Kafka 的数据卷需要先修正所有权：/tmp/kafka-logs 在镜像内并不存在，
+  # 是 entrypoint 运行时创建的；Docker 首次创建命名卷时该目录归 root，
+  # 而 kafka 容器以 uid=1000(appuser) 运行，会报
+  # "AccessDeniedException: /tmp/kafka-logs/bootstrap.checkpoint.tmp"。
+  # 这里用 alpine 预先 chown，避免让 Kafka 本身以 root 运行。
+  kafka-init:
+    image: alpine:3.19
+    container_name: golink-kafka-init
+    user: root
+    command: sh -c "chown -R 1000:1000 /tmp/kafka-logs"
+    volumes:
+      - kafka_data:/tmp/kafka-logs
+    restart: "no"
+
   kafka:
     image: apache/kafka:3.9.0
     container_name: golink-kafka
     restart: always
+    depends_on:
+      kafka-init:
+        condition: service_completed_successfully
     environment:
       KAFKA_NODE_ID: 1
       KAFKA_PROCESS_ROLES: broker,controller
       KAFKA_CONTROLLER_QUORUM_VOTERS: 1@localhost:9093
       KAFKA_LISTENERS: PLAINTEXT://0.0.0.0:9092,CONTROLLER://localhost:9093
-      KAFKA_ADVERTISED_LISTENERS: PLAINTEXT://localhost:9092
+      # 所有客户端（link-rpc / logconsumer）都在本 compose 网络内，
+      # 因此必须通告服务名。若用 localhost，客户端会被重定向到自己容器，
+      # 表现为 "dial tcp [::1]:9092: connect: connection refused"。
+      KAFKA_ADVERTISED_LISTENERS: PLAINTEXT://kafka:9092
       KAFKA_LISTENER_SECURITY_PROTOCOL_MAP: CONTROLLER:PLAINTEXT,PLAINTEXT:PLAINTEXT
       KAFKA_CONTROLLER_LISTENER_NAMES: CONTROLLER
+      # 单节点 broker：内部 topic 的复制因子必须为 1。
+      # 否则 __consumer_offsets 无法创建，消费组协调器始终返回
+      # "Group Coordinator Not Available"，logconsumer 永远消费不到消息。
+      KAFKA_OFFSETS_TOPIC_REPLICATION_FACTOR: 1
+      KAFKA_TRANSACTION_STATE_LOG_REPLICATION_FACTOR: 1
+      KAFKA_TRANSACTION_STATE_LOG_MIN_ISR: 1
+      KAFKA_GROUP_INITIAL_REBALANCE_DELAY_MS: 0
     ports:
       - "9092:9092"
     volumes:
-      - kafka_data:/bitnami/kafka
+      # 经实测，apache/kafka 官方镜像在 KRaft 模式下的实际 log dir 是
+      # /tmp/kafka-logs（不是 Bitnami 镜像的 /bitnami/kafka，也不是
+      # config/kraft/server.properties 里写的那个）——挂错路径数据不持久。
+      - kafka_data:/tmp/kafka-logs
 
   link-rpc:
     build:
